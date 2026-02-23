@@ -26,6 +26,28 @@ GAMES = [
 S_GAME_INDEX = next(i for i, g in enumerate(GAMES) if g["key"] == "s")
 
 SCORE_EDITOR_KEY = "score_editor"  # stable key for st.data_editor
+MOBILE_MODE_KEY = "mobile_mode"
+
+
+# ---------------- CSS (mobile-friendly taps, spacing) ----------------
+st.markdown(
+    """
+    <style>
+    .block-container { padding-top: 1rem; padding-bottom: 4rem; max-width: 1200px; }
+    /* Slightly tighter tables */
+    [data-testid="stDataFrame"] { font-size: 0.95rem; }
+    /* Bigger tap targets on small screens */
+    @media (max-width: 768px) {
+      button[kind="secondary"], button[kind="primary"] {
+        font-size: 1.05rem !important;
+        padding: 0.65rem 0.95rem !important;
+      }
+      .block-container { padding-left: 0.9rem; padding-right: 0.9rem; }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 
 # ---------------- Persistence ----------------
@@ -84,20 +106,8 @@ def compute_cumulative_from_deltas(deltas: pd.DataFrame) -> pd.DataFrame:
 def deltas_complete(deltas: pd.DataFrame) -> bool:
     return deltas.notna().all().all()
 
-def next_incomplete_row_index(deltas: pd.DataFrame) -> int:
-    """
-    Returns positional index (0-based) of the first row that has any NA.
-    If none, returns last row index.
-    """
-    if deltas is None or deltas.empty:
-        return 0
-    na_any = deltas.isna().any(axis=1)
-    if na_any.any():
-        return int(na_any[na_any].index[0])  # index is string numbers, but we set index as strings; careful below
-    return len(deltas) - 1
-
 def next_incomplete_row_pos(deltas: pd.DataFrame) -> int:
-    """Same idea but returns row position safely even if index is string."""
+    """Returns first row position where any player is NA."""
     if deltas is None or deltas.empty:
         return 0
     for i in range(len(deltas)):
@@ -119,23 +129,11 @@ def build_view_from_deltas(deltas: pd.DataFrame) -> pd.DataFrame:
         out[c] = view[c].apply(lambda x: "" if pd.isna(x) else str(int(x)))
     return out
 
-def apply_view_edits_to_deltas_with_slagalica(
-    old_view: pd.DataFrame,
-    new_view: pd.DataFrame,
-    deltas: pd.DataFrame,
-    slag_active: bool,
-    slag_row_pos: int,
-    dots_by_player: Dict[str, int],
-) -> Tuple[pd.DataFrame, Dict[str, int], bool]:
+def apply_view_edits_to_deltas(old_view: pd.DataFrame, new_view: pd.DataFrame, deltas: pd.DataFrame) -> pd.DataFrame:
     """
     EXCEL-LIKE RULE:
     - Any integer typed is treated as ROUND DELTA.
-    - The cell will display cumulative after rerun.
-
-    SLAGALICA (S) MODE:
-    - If slag_active is True, and the edited cell is in slag_row_pos,
-      then delta_entered gets + dots_by_player[player], and that player's dots reset to 0.
-    - When the slag_row_pos becomes complete (no NA across all players), slag_active becomes False and all dots reset.
+    - Clearing clears this and all below for that player.
     """
     cols = list(deltas.columns)
     idx = list(deltas.index)
@@ -148,7 +146,6 @@ def apply_view_edits_to_deltas_with_slagalica(
             if old == new:
                 continue
 
-            # Clear => clear this and all below for that player
             if new == "":
                 deltas.loc[idx[r_i]:, col] = pd.NA
                 continue
@@ -158,22 +155,9 @@ def apply_view_edits_to_deltas_with_slagalica(
             except ValueError:
                 continue
 
-            # If Slagalica is active and this is the Slagalica scoring row:
-            if slag_active and (r_i == slag_row_pos):
-                bonus = int(dots_by_player.get(col, 0))
-                if bonus != 0:
-                    delta_val += bonus
-                dots_by_player[col] = 0  # reset dots for that player after using them
-
             deltas.at[r, col] = int(delta_val)
 
-    # If slag row is now complete, end slag mode and reset all dots
-    if slag_active:
-        if not deltas.iloc[slag_row_pos].isna().any():
-            slag_active = False
-            dots_by_player = {p: 0 for p in cols}
-
-    return deltas, dots_by_player, slag_active
+    return deltas
 
 
 # ---------------- App state ----------------
@@ -186,7 +170,7 @@ def init_state():
     st.session_state.player_count = 4
     st.session_state.setup_names = ["", "", "", ""]
 
-    # Current game (persists while browsing history/facts)
+    # Current game
     st.session_state.players_display = []
     st.session_state.players_keys = []
 
@@ -202,10 +186,8 @@ def init_state():
     # Editor baseline view (DataFrame of strings)
     st.session_state.score_old_view = None
 
-    # Slagalica runtime
-    st.session_state.slagalica_active = False
-    st.session_state.slagalica_row_pos = 0
-    st.session_state.s_dots = {}  # player_name -> int
+    # Mobile mode toggle default
+    st.session_state[MOBILE_MODE_KEY] = st.session_state.get(MOBILE_MODE_KEY, False)
 
 def reset_to_menu(keep_names=True):
     st.session_state.view = "menu"
@@ -218,10 +200,6 @@ def reset_to_menu(keep_names=True):
     st.session_state.saved_current = False
     st.session_state.last_saved_id = None
     st.session_state.score_old_view = None
-
-    st.session_state.slagalica_active = False
-    st.session_state.slagalica_row_pos = 0
-    st.session_state.s_dots = {}
 
     if SCORE_EDITOR_KEY in st.session_state:
         del st.session_state[SCORE_EDITOR_KEY]
@@ -252,7 +230,7 @@ def start_game_from_setup():
     # Tracker init
     st.session_state.played = {(p_i, g_i): False for p_i in range(n) for g_i in range(len(GAMES))}
 
-    # Fixed rows = players * 6 (as requested)
+    # Fixed rows = players * 6
     rows = n * len(GAMES)
     deltas = pd.DataFrame({p: pd.Series([pd.NA] * rows, dtype="Int64") for p in players})
     deltas.index = [str(i + 1) for i in range(rows)]
@@ -264,11 +242,6 @@ def start_game_from_setup():
     st.session_state.view = "play"
 
     st.session_state.score_old_view = build_view_from_deltas(deltas)
-
-    # Slagalica init
-    st.session_state.slagalica_active = False
-    st.session_state.slagalica_row_pos = next_incomplete_row_pos(deltas)
-    st.session_state.s_dots = {p: 0 for p in players}
 
     if SCORE_EDITOR_KEY in st.session_state:
         del st.session_state[SCORE_EDITOR_KEY]
@@ -291,27 +264,12 @@ def start_rematch_same_players():
 
     st.session_state.score_old_view = build_view_from_deltas(deltas)
 
-    st.session_state.slagalica_active = False
-    st.session_state.slagalica_row_pos = next_incomplete_row_pos(deltas)
-    st.session_state.s_dots = {p: 0 for p in players}
-
     if SCORE_EDITOR_KEY in st.session_state:
         del st.session_state[SCORE_EDITOR_KEY]
 
 def toggle_played(p_i: int, g_i: int) -> None:
-    """
-    If the user turns on S for any player, we activate Slagalica for the next incomplete score row.
-    """
     prev = st.session_state.played.get((p_i, g_i), False)
     st.session_state.played[(p_i, g_i)] = not prev
-
-    # If S was just turned ON, activate Slagalica for the next scoring row
-    if g_i == S_GAME_INDEX and (not prev) and st.session_state.played[(p_i, g_i)]:
-        if st.session_state.deltas_df is not None:
-            st.session_state.slagalica_active = True
-            st.session_state.slagalica_row_pos = next_incomplete_row_pos(st.session_state.deltas_df)
-            # keep dots (do not reset automatically here)
-    # If S turned OFF, do nothing special.
 
 def delete_night_by_id(night_id: str) -> int:
     db = st.session_state.db
@@ -338,7 +296,6 @@ def save_current_game_night(auto: bool = True) -> str:
 
     done, total = played_progress()
 
-    # store played tracker grid too (so history can show it)
     n_players = len(players)
     played_grid = [[bool(st.session_state.played[(p_i, g_i)]) for g_i in range(len(GAMES))] for p_i in range(n_players)]
 
@@ -362,10 +319,6 @@ def save_current_game_night(auto: bool = True) -> str:
 
 # ---------------- data_editor on_change callback ----------------
 def on_score_change():
-    """
-    Updates deltas_df based on edits in the visible cumulative view.
-    Applies Slagalica dots only for the currently active Slagalica row.
-    """
     if st.session_state.deltas_df is None:
         return
 
@@ -380,26 +333,12 @@ def on_score_change():
     new_view = editor_value_to_df(old_view, widget_value)
     new_view = new_view.reindex(index=old_view.index, columns=old_view.columns)
 
-    updated, new_dots, new_slag_active = apply_view_edits_to_deltas_with_slagalica(
-        old_view=old_view,
-        new_view=new_view,
-        deltas=st.session_state.deltas_df.copy(),
-        slag_active=bool(st.session_state.slagalica_active),
-        slag_row_pos=int(st.session_state.slagalica_row_pos),
-        dots_by_player=dict(st.session_state.s_dots),
-    )
+    updated = apply_view_edits_to_deltas(old_view, new_view, st.session_state.deltas_df.copy())
 
     for c in updated.columns:
         updated[c] = updated[c].astype("Int64")
 
     st.session_state.deltas_df = updated
-    st.session_state.s_dots = new_dots
-    st.session_state.slagalica_active = new_slag_active
-
-    # If still active, keep the same row; if it just ended, refresh next row pointer
-    if not st.session_state.slagalica_active:
-        st.session_state.slagalica_row_pos = next_incomplete_row_pos(updated)
-
     st.session_state.score_old_view = build_view_from_deltas(updated)
 
 
@@ -407,31 +346,49 @@ def on_score_change():
 if "db" not in st.session_state:
     init_state()
 
+
 # ---------------- Sidebar navigation (buttons) ----------------
 with st.sidebar:
     st.header("Lora Nights")
 
-    if st.button("🏠 Glavni meni"):
+    if st.button("🏠 Main menu"):
         reset_to_menu(keep_names=True)
         st.rerun()
 
     c1, c2, c3 = st.columns(3)
-    if c1.button("🎮 Igraj"):
+    if c1.button("🎮 Play"):
         st.session_state.view = "play" if st.session_state.deltas_df is not None else "menu"
         st.rerun()
-    if c2.button("📜 Istorija"):
+    if c2.button("📜 History"):
         st.session_state.view = "history"
         st.rerun()
-    if c3.button("📊 Statistika"):
+    if c3.button("📊 Facts"):
         st.session_state.view = "facts"
         st.rerun()
 
     st.write("---")
-    if st.button("🔁 Reset (sve)"):
+    st.session_state[MOBILE_MODE_KEY] = st.toggle("📱 Mobile mode", value=st.session_state.get(MOBILE_MODE_KEY, False))
+
+    st.write("---")
+    if st.button("🔁 Reset app (everything)"):
         init_state()
         st.rerun()
 
+
+# ---------------- Top nav for mobile (big buttons) ----------------
 st.title("🃏 Lora Nights")
+if st.session_state.get(MOBILE_MODE_KEY, False):
+    top1, top2, top3 = st.columns(3)
+    if top1.button("🎮 Play", use_container_width=True):
+        st.session_state.view = "play" if st.session_state.deltas_df is not None else "menu"
+        st.rerun()
+    if top2.button("📜 History", use_container_width=True):
+        st.session_state.view = "history"
+        st.rerun()
+    if top3.button("📊 Facts", use_container_width=True):
+        st.session_state.view = "facts"
+        st.rerun()
+    st.write("---")
 
 
 # =========================
@@ -480,74 +437,102 @@ elif st.session_state.view == "play":
     else:
         players = st.session_state.players_display
         n = len(players)
+        deltas = st.session_state.deltas_df
 
-        # ---------------- Played tracker (games stay here) ----------------
-        st.subheader("Played tracker")
-        st.caption("Tap a box to toggle an X. (If you turn on **S** for anyone, Slagalica mode activates for the next score row.)")
+        # --- Mobile: collapse tracker to reduce scrolling ---
+        mobile_mode = st.session_state.get(MOBILE_MODE_KEY, False)
+        tracker_expanded = not mobile_mode
 
-        w = [2.0] + [0.65] * len(GAMES)
-        hdr = st.columns(w)
-        hdr[0].markdown("**Player**")
-        for i, g in enumerate(GAMES, start=1):
-            hdr[i].markdown(f"**{g['label']}**")
+        with st.expander("Played tracker", expanded=tracker_expanded):
+            st.caption("Tap a box to toggle an X.")
+            w = [2.0] + [0.65] * len(GAMES)
+            hdr = st.columns(w)
+            hdr[0].markdown("**Player**")
+            for i, g in enumerate(GAMES, start=1):
+                hdr[i].markdown(f"**{g['label']}**")
 
-        for p_i, p_name in enumerate(players):
-            row = st.columns(w)
-            row[0].write(p_name)
-            for g_i in range(len(GAMES)):
-                label = "✕" if st.session_state.played[(p_i, g_i)] else " "
-                if row[g_i + 1].button(label, key=f"played_{p_i}_{g_i}", use_container_width=True):
-                    toggle_played(p_i, g_i)
-                    st.rerun()
+            for p_i, p_name in enumerate(players):
+                row = st.columns(w)
+                row[0].write(p_name)
+                for g_i in range(len(GAMES)):
+                    label = "✕" if st.session_state.played[(p_i, g_i)] else " "
+                    if row[g_i + 1].button(label, key=f"played_{p_i}_{g_i}", use_container_width=True):
+                        toggle_played(p_i, g_i)
+                        st.rerun()
 
-        done, total = played_progress()
-        st.write(f"**Progress:** {done}/{total}")
-
-        # ---------------- Slagalica dots (tap player name) ----------------
-        if st.session_state.slagalica_active:
-            st.write("---")
-            rpos = int(st.session_state.slagalica_row_pos)
-            row_label = st.session_state.deltas_df.index[rpos]
-            st.subheader("Slagalica mode (active)")
-            st.caption(f"Tapni ime igraca da mu dodas tacku. Tacke ce se dodati pri sledecem unosenju bodova **row {row_label}** and then reset.")
-
-            name_cols = st.columns(n)
-            for i, p in enumerate(players):
-                dots = int(st.session_state.s_dots.get(p, 0))
-                btn_label = f"{p} • {dots}"
-                if name_cols[i].button(btn_label, key=f"dot_add_{p}"):
-                    st.session_state.s_dots[p] = dots + 1
-                    st.rerun()
-
-            st.caption("Tip: When you type the score for row " + str(row_label) + ", your dots are automatically added for each player you enter.")
+            done, total = played_progress()
+            st.write(f"**Progress:** {done}/{total}")
 
         st.write("---")
 
-        # ---------------- Score sheet (same as before) ----------------
-        st.subheader("Score sheet (fixed rows, Excel-like totals)")
+        # --- Score sheet ---
+        st.subheader("Score sheet")
         st.caption(
-            f"Rows fixed: players × 6 = **{n*6}**. "
-            "Type ROUND changes (delta): e.g. **5** or **-4**. "
-            "After Enter, the cell shows the running total. "
-            "If Slagalica is active, dots are added automatically for that row."
+            f"Rows fixed: players × 6 = **{n*6}**.\n"
+            "Type round changes (delta): e.g. 5 or -4.\n"
+            "After Enter, the cell shows the running total."
         )
 
-        if st.session_state.score_old_view is None:
-            st.session_state.score_old_view = build_view_from_deltas(st.session_state.deltas_df)
+        if mobile_mode:
+            # ---- Mobile-friendly round entry ----
+            st.markdown("### 📱 Quick round entry")
 
-        view_df = st.session_state.score_old_view
+            n_rows = len(deltas)
+            current_pos = next_incomplete_row_pos(deltas)
+            row_choice = st.number_input("Round", min_value=1, max_value=n_rows, value=current_pos + 1, step=1) - 1
 
-        st.data_editor(
-            view_df,
-            key=SCORE_EDITOR_KEY,
-            on_change=on_score_change,
-            use_container_width=True,
-            num_rows="fixed",
-            height=520,
-            column_config={p: st.column_config.TextColumn(width="small") for p in players},
-        )
+            st.caption("Enter each player’s round change (delta).")
+            round_inputs = {}
+            for p in players:
+                round_inputs[p] = st.text_input(
+                    p,
+                    value="",
+                    placeholder="e.g. 5 or -4",
+                    key=f"mob_{row_choice}_{p}",
+                )
 
-        # Totals at bottom
+            if st.button("✅ Save this round", type="primary"):
+                # require all players filled
+                for p in players:
+                    v = round_inputs[p].strip()
+                    if v == "":
+                        st.warning("Fill all players for this round.")
+                        st.stop()
+                    try:
+                        deltas.iat[row_choice, deltas.columns.get_loc(p)] = int(v)
+                    except ValueError:
+                        st.warning(f"Invalid number for {p}.")
+                        st.stop()
+
+                st.session_state.deltas_df = deltas
+                st.session_state.score_old_view = build_view_from_deltas(deltas)
+
+                st.success("Saved round ✅")
+                st.rerun()
+
+            st.write("---")
+            st.caption("Full sheet (read-only preview on mobile):")
+            preview = deltas.fillna(0).astype(int).cumsum(axis=0)
+            st.dataframe(preview, use_container_width=True, height=320)
+
+        else:
+            # ---- Desktop grid editor (your preferred) ----
+            if st.session_state.score_old_view is None:
+                st.session_state.score_old_view = build_view_from_deltas(deltas)
+
+            view_df = st.session_state.score_old_view
+
+            st.data_editor(
+                view_df,
+                key=SCORE_EDITOR_KEY,
+                on_change=on_score_change,
+                use_container_width=True,
+                num_rows="fixed",
+                height=520,
+                column_config={p: st.column_config.TextColumn(width="small") for p in players},
+            )
+
+        # Totals at bottom (always visible)
         cum = compute_cumulative_from_deltas(st.session_state.deltas_df)
         final = cum.iloc[-1].fillna(0).astype(int).tolist() if len(cum) else [0] * n
         tot_cols = st.columns(n)
@@ -582,10 +567,10 @@ elif st.session_state.view == "history":
     nights = list(reversed(db.get("nights", [])))
 
     st.subheader("History")
-    st.caption("You can return to the current game anytime using the sidebar Play button.")
+    st.caption("You can return to the current game anytime using Play.")
 
     if not nights:
-        st.info("Nema sacuvanih partija.")
+        st.info("No saved game nights yet.")
     else:
         for night in nights:
             night_id = night.get("id", "")
@@ -601,13 +586,13 @@ elif st.session_state.view == "history":
 
                 players = night["players_display"]
                 finals = night["final_totals"]
-                deltas = night["deltas"]
+                deltas_list = night["deltas"]
 
-                # Full score sheet like before:
-                df = pd.DataFrame(deltas, columns=players)
+                df = pd.DataFrame(deltas_list, columns=players)
                 df.index = [str(i + 1) for i in range(len(df))]
-                #st.caption("Deltas (round changes)")
-                #st.dataframe(df, use_container_width=True, height=320)
+
+                st.caption("Deltas (round changes)")
+                st.dataframe(df, use_container_width=True, height=320)
 
                 st.caption("Running totals")
                 st.dataframe(df.cumsum(axis=0), use_container_width=True, height=320)
@@ -616,12 +601,10 @@ elif st.session_state.view == "history":
                 for i, p in enumerate(players):
                     cols[i].metric(label=p, value=finals[i])
 
-                # Played tracker snapshot (optional, compact)
                 tr = night.get("played_tracker", {})
                 grid = tr.get("grid")
                 if isinstance(grid, list):
                     st.caption("Played tracker snapshot")
-                    # show compact text rows: e.g. "Ivana: ♥ K♥ + − Qs S"
                     for p_i, p_name in enumerate(players):
                         marks = []
                         for g_i, g in enumerate(GAMES):
@@ -638,7 +621,7 @@ else:
     nights = db.get("nights", [])
 
     st.subheader("Facts")
-    st.caption("Facts update automatically when you delete nights in History. Return to the current game via sidebar Play.")
+    st.caption("Facts update automatically when you delete nights in History.")
 
     if not nights:
         st.info("Save at least one complete game night to see analytics.")
@@ -673,7 +656,7 @@ else:
 
         c1, c2 = st.columns(2)
         with c1:
-            st.markdown("### 🏆 Najvise pobjeda")
+            st.markdown("### 🏆 Most wins (lowest final score)")
             if wins:
                 m = max(wins.values())
                 top = [k for k, v in wins.items() if v == m]
@@ -682,7 +665,7 @@ else:
                 st.write("—")
 
         with c2:
-            st.markdown("### 🧱 Najveci gubitnik ")
+            st.markdown("### 🧱 Most last-place finishes (highest final score)")
             if lasts:
                 m = max(lasts.values())
                 top = [k for k, v in lasts.items() if v == m]
@@ -692,7 +675,7 @@ else:
 
         st.write("---")
         st.markdown("### 📈 Extremes")
-        st.caption("Najgori rezultati i najbokji rezultati.")
+        st.caption("Lowest = best (good). Highest = worst (bad).")
 
         now = datetime.now(TZ)
         week_key = now.isocalendar()[:2]
@@ -716,16 +699,16 @@ else:
             high_name = display_for(high[1], high[2])
 
             a, b = st.columns(2)
-            a.metric(f"Najnizi skor ({label}) ✅", low[3])
+            a.metric(f"Lowest ({label}) ✅", low[3])
             a.caption(f"{low_name} — {low[0].strftime('%Y-%m-%d %H:%M')}")
-            b.metric(f"Najveci skor({label}) ❌", high[3])
+            b.metric(f"Highest ({label}) ❌", high[3])
             b.caption(f"{high_name} — {high[0].strftime('%Y-%m-%d %H:%M')}")
 
-        st.markdown("#### Ove nedjelje")
+        st.markdown("#### This week")
         show_extremes("this week", period_records("week"))
 
-        st.markdown("#### Ovog mjeseca")
+        st.markdown("#### This month")
         show_extremes("this month", period_records("month"))
 
-        st.markdown("#### Svih vremena")
+        st.markdown("#### All time")
         show_extremes("all time", period_records("all"))
