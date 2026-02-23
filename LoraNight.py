@@ -700,9 +700,6 @@ elif st.session_state.view == "history":
                 df = pd.DataFrame(deltas_list, columns=players)
                 df.index = [str(i + 1) for i in range(len(df))]
 
-                st.caption("Deltas (round changes)")
-                st.dataframe(df, use_container_width=True, height=320)
-
                 st.caption("Running totals")
                 st.dataframe(df.cumsum(axis=0), use_container_width=True, height=320)
 
