@@ -496,36 +496,35 @@ elif st.session_state.view == "play":
         with st.expander("Played tracker", expanded=tracker_expanded):
             st.caption("Tap to mark played games.")
 
-                if mobile_mode:
-        st.caption("Tap to mark played games (mobile layout).")
+            if mobile_mode:
+                st.caption("Tap to mark played games (mobile layout).")
 
-        # Vertical, per-player list: icon next to checkbox
-        for p_i, p_name in enumerate(players):
-            st.markdown(f"### {p_name}")
+                # Vertical, per-player list: icon next to checkbox
+                for p_i, p_name in enumerate(players):
+                    st.markdown(f"### {p_name}")
 
-            # Track whether S was OFF then turned ON for this player
-            prev_s = bool(st.session_state.played.get((p_i, S_GAME_INDEX), False))
+                    # Track whether S was OFF then turned ON for this player
+                    prev_s = bool(st.session_state.played.get((p_i, S_GAME_INDEX), False))
 
-            for g_i, g in enumerate(GAMES):
-                left, right = st.columns([1.2, 0.8], vertical_alignment="center")
+                    for g_i, g in enumerate(GAMES):
+                        left, right = st.columns([1.2, 0.8], vertical_alignment="center")
 
-                left.markdown(f"**{g['label']}**")
-                new_val = right.checkbox(
-                    " ",
-                    value=bool(st.session_state.played.get((p_i, g_i), False)),
-                    key=f"mob_chk_{p_i}_{g_i}",
-                    label_visibility="collapsed",
-                )
+                        left.markdown(f"**{g['label']}**")
+                        new_val = right.checkbox(
+                            " ",
+                            value=bool(st.session_state.played.get((p_i, g_i), False)),
+                            key=f"mob_chk_{p_i}_{g_i}",
+                            label_visibility="collapsed",
+                        )
 
-                st.session_state.played[(p_i, g_i)] = bool(new_val)
+                        st.session_state.played[(p_i, g_i)] = bool(new_val)
 
-            # If S got turned ON, activate Slagalica for next incomplete score row
-            new_s = bool(st.session_state.played.get((p_i, S_GAME_INDEX), False))
-            if (not prev_s) and new_s:
-                activate_slagalica_for_next_row()
+                    # If S got turned ON, activate Slagalica for next incomplete score row
+                    new_s = bool(st.session_state.played.get((p_i, S_GAME_INDEX), False))
+                    if (not prev_s) and new_s:
+                        activate_slagalica_for_next_row()
 
-            st.divider()
-
+                    st.divider()
             else:
                 # DESKTOP: clickable X grid
                 w = [2.0] + [0.65] * len(GAMES)
