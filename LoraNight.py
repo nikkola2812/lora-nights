@@ -183,135 +183,118 @@ def t(key: str, **kwargs) -> str:
 st.markdown(
     """
     <style>
-    /* ===== Clean neutral layout ===== */
-    .block-container {
-      padding-top: 1rem;
-      padding-bottom: 4rem;
-      max-width: 1200px;
-    }
+    /* ===== Clean layout ===== */
+    .block-container { padding-top: 1rem; padding-bottom: 4rem; max-width: 1200px; }
+    [data-testid="stDataFrame"] { font-size: 0.95rem; border-radius: 12px; overflow: hidden; }
 
-    [data-testid="stDataFrame"] {
-      font-size: 0.95rem;
-      border-radius: 12px;
-      overflow: hidden;
-    }
+    /* ===== Podium layout ===== */
+    .podium-row { margin-top: 0.5rem; margin-bottom: 0.75rem; }
 
-    /* ===== Podium cards ===== */
     .podium-card {
-        border-radius: 16px;
-        padding: 16px;
-        border: 1px solid rgba(255,255,255,0.08);
-        background: rgba(20,20,20,0.35);
+        border-radius: 18px;
+        padding: 16px 16px 14px 16px;
+        border: 1px solid rgba(255,255,255,0.10);
+        background: rgba(20,20,20,0.38);
         backdrop-filter: blur(6px);
-        box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+        box-shadow: 0 10px 26px rgba(0,0,0,0.26);
         position: relative;
         overflow: hidden;
-        min-height: 110px;
+        min-height: 112px;
     }
 
-    .podium-rank {
-        font-size: 0.95rem;
-        opacity: 0.8;
-        margin-bottom: 6px;
-    }
+    .podium-rank { font-size: 0.95rem; opacity: 0.85; margin-bottom: 6px; }
+    .podium-name { font-size: 1.18rem; font-weight: 750; margin-bottom: 4px; }
+    .podium-wins { font-size: 1.05rem; font-weight: 700; }
 
-    .podium-name {
-        font-size: 1.15rem;
-        font-weight: 700;
-        margin-bottom: 4px;
-    }
+    /* Podium heights */
+    .podium-1 { transform: translateY(-10px); min-height: 132px; }
+    .podium-2 { transform: translateY(10px);  min-height: 118px; }
+    .podium-3 { transform: translateY(12px);  min-height: 118px; }
 
-    .podium-wins {
-        font-size: 1.05rem;
-        font-weight: 650;
-    }
-
-    /* ===== Soft shimmer (no spinning) ===== */
-    .shine::before {
+    /* Gentle shimmer (no spin) */
+    .shine::before{
         content:"";
         position:absolute;
-        top:-40%;
-        left:-60%;
-        width:60%;
-        height:200%;
-        transform: rotate(20deg);
+        top:-45%;
+        left:-70%;
+        width:65%;
+        height:220%;
+        transform: rotate(18deg);
         opacity:0;
-        animation: shimmer 3.5s ease-in-out infinite;
+        animation: shimmer 3.2s ease-in-out infinite;
         pointer-events:none;
+        filter: blur(0.2px);
     }
-
     @keyframes shimmer {
-        0%   { left:-60%; opacity:0; }
-        20%  { opacity:0.4; }
-        50%  { left:120%; opacity:0.25; }
+        0%   { left:-70%; opacity:0; }
+        18%  { opacity:0.55; }
+        50%  { left:125%; opacity:0.30; }
         80%  { opacity:0; }
-        100% { left:120%; opacity:0; }
+        100% { left:125%; opacity:0; }
     }
 
-    /* ===== Medal styles ===== */
-
+    /* ===== OUTER GLOW (stronger) + medal colors ===== */
     /* Gold */
     .gold {
-        border-color: rgba(255,215,0,0.35);
+        border-color: rgba(255,215,0,0.40);
+        box-shadow:
+            0 10px 26px rgba(0,0,0,0.26),
+            0 0 22px rgba(255,215,0,0.20),
+            0 0 42px rgba(255,215,0,0.14);
     }
-    .gold .podium-wins {
-        color: rgba(255,215,0,0.95);
-    }
+    .gold .podium-wins { color: rgba(255,215,0,0.98); }
     .gold.shine::before {
-        background: linear-gradient(
-            90deg,
-            rgba(255,215,0,0.0),
-            rgba(255,215,0,0.45),
-            rgba(255,215,0,0.0)
+        background: linear-gradient(90deg,
+            rgba(255,215,0,0.00),
+            rgba(255,215,0,0.60),
+            rgba(255,215,0,0.00)
         );
     }
 
     /* Silver */
     .silver {
-        border-color: rgba(200,200,200,0.35);
+        border-color: rgba(210,210,210,0.42);
+        box-shadow:
+            0 10px 26px rgba(0,0,0,0.26),
+            0 0 22px rgba(225,225,225,0.18),
+            0 0 42px rgba(225,225,225,0.12);
     }
-    .silver .podium-wins {
-        color: rgba(220,220,220,0.95);
-    }
+    .silver .podium-wins { color: rgba(235,235,235,0.98); }
     .silver.shine::before {
-        background: linear-gradient(
-            90deg,
-            rgba(200,200,200,0.0),
-            rgba(220,220,220,0.45),
-            rgba(200,200,200,0.0)
+        background: linear-gradient(90deg,
+            rgba(225,225,225,0.00),
+            rgba(245,245,245,0.55),
+            rgba(225,225,225,0.00)
         );
     }
 
     /* Bronze */
     .bronze {
-        border-color: rgba(205,127,50,0.35);
+        border-color: rgba(205,127,50,0.42);
+        box-shadow:
+            0 10px 26px rgba(0,0,0,0.26),
+            0 0 22px rgba(205,127,50,0.18),
+            0 0 42px rgba(205,127,50,0.12);
     }
-    .bronze .podium-wins {
-        color: rgba(205,127,50,0.95);
-    }
+    .bronze .podium-wins { color: rgba(205,127,50,0.98); }
     .bronze.shine::before {
-        background: linear-gradient(
-            90deg,
-            rgba(205,127,50,0.0),
-            rgba(205,127,50,0.45),
-            rgba(205,127,50,0.0)
+        background: linear-gradient(90deg,
+            rgba(205,127,50,0.00),
+            rgba(205,127,50,0.55),
+            rgba(205,127,50,0.00)
         );
     }
 
+    /* Mobile: reduce vertical offsets */
     @media (max-width: 768px) {
-      button[kind="secondary"], button[kind="primary"] {
-        font-size: 1.05rem !important;
-        padding: 0.65rem 0.95rem !important;
-      }
-      .block-container {
-        padding-left: 0.9rem;
-        padding-right: 0.9rem;
-      }
+      .podium-1, .podium-2, .podium-3 { transform: none; }
+      .podium-1 { min-height: 128px; }
+      .podium-2, .podium-3 { min-height: 116px; }
+      .block-container { padding-left: 0.9rem; padding-right: 0.9rem; }
     }
     </style>
     """,
     unsafe_allow_html=True
-
 )
 
 # ---------------- Persistence ----------------
@@ -1010,24 +993,44 @@ else:
             y, m = chosen_label.split("-")
             chosen_month_key = (int(y), int(m))
 
-        def podium(cards: List[Tuple[str, int]]):
-            styles = [("🥇 1st", "gold"), ("🥈 2nd", "silver"), ("🥉 3rd", "bronze")]
-            cols = st.columns(3)
-            for i in range(3):
-                if i < len(cards):
-                    name, wins = cards[i]
-                    rank_txt, cls = styles[i]
-                    html = f"""
-                    <div class="podium-card {cls} shine">
-                      <div class="podium-rank">{rank_txt}</div>
-                      <div class="podium-name">{name}</div>
-                      <div class="podium-wins">{wins} {t('wins_word')}</div>
-                    </div>
-                    """
-                    cols[i].markdown(html, unsafe_allow_html=True)
-                else:
-                    cols[i].markdown("<div class='podium-card' style='opacity:0.35'></div>", unsafe_allow_html=True)
 
+        def podium(cards: List[Tuple[str, int]]):
+            """
+            cards: [(name, wins), ...] sorted desc by wins (wins > 0)
+            Shows: 2nd (left), 1st (center/top), 3rd (right)
+            """
+            # Build slots for ranks 1..3
+            top = cards[:3]
+            # Ensure length 3 with blanks
+            while len(top) < 3:
+                top.append(("", 0))
+
+            # Order for visual podium: 2nd, 1st, 3rd
+            order = [
+                (1, "🥈 2nd", "silver", "podium-2"),  # index 1 = second place (if exists)
+                (0, "🥇 1st", "gold", "podium-1"),  # index 0 = first place
+                (2, "🥉 3rd", "bronze", "podium-3"),  # index 2 = third place
+            ]
+
+            cols = st.columns(3)
+            for col_i, (src_i, rank_txt, medal_cls, height_cls) in enumerate(order):
+                name, wins = top[src_i]
+                if name == "":
+                    cols[col_i].markdown(
+                        "<div class='podium-card' style='opacity:0.25; min-height:112px;'></div>",
+                        unsafe_allow_html=True
+                    )
+                    continue
+
+                html = f"""
+                <div class="podium-card {medal_cls} shine {height_cls}">
+                  <div class="podium-rank">{rank_txt}</div>
+                  <div class="podium-name">{name}</div>
+                  <div class="podium-wins">{wins} {t('wins_word')}</div>
+                </div>
+                """
+                cols[col_i].markdown(html, unsafe_allow_html=True)
+                
         base = df if view_mode == "all" else df[df["month_key"] == chosen_month_key]
 
         wins_tbl = (
