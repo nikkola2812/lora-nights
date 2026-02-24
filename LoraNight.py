@@ -183,63 +183,135 @@ def t(key: str, **kwargs) -> str:
 st.markdown(
     """
     <style>
-    .block-container { padding-top: 1rem; padding-bottom: 4rem; max-width: 1200px; }
-    [data-testid="stDataFrame"] { font-size: 0.95rem; }
+    /* ===== Clean neutral layout ===== */
+    .block-container {
+      padding-top: 1rem;
+      padding-bottom: 4rem;
+      max-width: 1200px;
+    }
 
-    /* Podium styles */
+    [data-testid="stDataFrame"] {
+      font-size: 0.95rem;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    /* ===== Podium cards ===== */
     .podium-card {
-        border-radius: 18px;
-        padding: 14px 14px 12px 14px;
-        border: 1px solid rgba(255,255,255,0.10);
+        border-radius: 16px;
+        padding: 16px;
+        border: 1px solid rgba(255,255,255,0.08);
         background: rgba(20,20,20,0.35);
         backdrop-filter: blur(6px);
-        box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.25);
         position: relative;
         overflow: hidden;
         min-height: 110px;
     }
-    .podium-rank { font-size: 0.95rem; opacity: 0.85; margin-bottom: 6px; }
-    .podium-name { font-size: 1.15rem; font-weight: 700; margin-bottom: 2px; }
-    .podium-wins { font-size: 1.05rem; font-weight: 650; }
 
-    .shine::before{
-        content:"";
-        position:absolute;
-        inset:-60%;
-        background: conic-gradient(from 180deg, rgba(255,255,255,0.0), rgba(255,255,255,0.18), rgba(255,255,255,0.0));
-        animation: spin 3.2s linear infinite;
+    .podium-rank {
+        font-size: 0.95rem;
+        opacity: 0.8;
+        margin-bottom: 6px;
     }
-    .shine::after{
+
+    .podium-name {
+        font-size: 1.15rem;
+        font-weight: 700;
+        margin-bottom: 4px;
+    }
+
+    .podium-wins {
+        font-size: 1.05rem;
+        font-weight: 650;
+    }
+
+    /* ===== Soft shimmer (no spinning) ===== */
+    .shine::before {
         content:"";
         position:absolute;
-        inset:0;
-        background: radial-gradient(circle at 20% 15%, rgba(255,255,255,0.10), rgba(255,255,255,0.0) 55%);
+        top:-40%;
+        left:-60%;
+        width:60%;
+        height:200%;
+        transform: rotate(20deg);
+        opacity:0;
+        animation: shimmer 3.5s ease-in-out infinite;
         pointer-events:none;
     }
-    @keyframes spin { to { transform: rotate(360deg);} }
 
-    .gold { border-color: rgba(255,215,0,0.25); }
-    .gold .podium-wins { color: rgba(255,215,0,0.95); }
-    .gold.shine::before { background: conic-gradient(from 180deg, rgba(255,215,0,0.0), rgba(255,215,0,0.30), rgba(255,215,0,0.0)); }
+    @keyframes shimmer {
+        0%   { left:-60%; opacity:0; }
+        20%  { opacity:0.4; }
+        50%  { left:120%; opacity:0.25; }
+        80%  { opacity:0; }
+        100% { left:120%; opacity:0; }
+    }
 
-    .silver { border-color: rgba(192,192,192,0.22); }
-    .silver .podium-wins { color: rgba(220,220,220,0.95); }
-    .silver.shine::before { background: conic-gradient(from 180deg, rgba(192,192,192,0.0), rgba(192,192,192,0.28), rgba(192,192,192,0.0)); }
+    /* ===== Medal styles ===== */
 
-    .bronze { border-color: rgba(205,127,50,0.22); }
-    .bronze .podium-wins { color: rgba(205,127,50,0.95); }
-    .bronze.shine::before { background: conic-gradient(from 180deg, rgba(205,127,50,0.0), rgba(205,127,50,0.28), rgba(205,127,50,0.0)); }
+    /* Gold */
+    .gold {
+        border-color: rgba(255,215,0,0.35);
+    }
+    .gold .podium-wins {
+        color: rgba(255,215,0,0.95);
+    }
+    .gold.shine::before {
+        background: linear-gradient(
+            90deg,
+            rgba(255,215,0,0.0),
+            rgba(255,215,0,0.45),
+            rgba(255,215,0,0.0)
+        );
+    }
+
+    /* Silver */
+    .silver {
+        border-color: rgba(200,200,200,0.35);
+    }
+    .silver .podium-wins {
+        color: rgba(220,220,220,0.95);
+    }
+    .silver.shine::before {
+        background: linear-gradient(
+            90deg,
+            rgba(200,200,200,0.0),
+            rgba(220,220,220,0.45),
+            rgba(200,200,200,0.0)
+        );
+    }
+
+    /* Bronze */
+    .bronze {
+        border-color: rgba(205,127,50,0.35);
+    }
+    .bronze .podium-wins {
+        color: rgba(205,127,50,0.95);
+    }
+    .bronze.shine::before {
+        background: linear-gradient(
+            90deg,
+            rgba(205,127,50,0.0),
+            rgba(205,127,50,0.45),
+            rgba(205,127,50,0.0)
+        );
+    }
 
     @media (max-width: 768px) {
       button[kind="secondary"], button[kind="primary"] {
         font-size: 1.05rem !important;
         padding: 0.65rem 0.95rem !important;
       }
-      .block-container { padding-left: 0.9rem; padding-right: 0.9rem; }
+      .block-container {
+        padding-left: 0.9rem;
+        padding-right: 0.9rem;
+      }
     }
     </style>
     """,
     unsafe_allow_html=True
+
 )
 
 # ---------------- Persistence ----------------
